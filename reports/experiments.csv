@@ -1,0 +1,11 @@
+date,model,features,params,val_acc,val_macro_f1,test_acc,test_macro_f1,train_seconds,inference_seconds
+2026-09-28 17:58,baseline_svm,w2_energy_mfcc40,"{""C"": 10}",0.5032,0.5055,0.4794,0.4739,1.2,0.24
+2026-09-28 17:58,baseline_rf,w2_energy_mfcc40,"{""n_estimators"": 500}",0.4762,0.463,0.4381,0.4241,3.5,0.11
+2026-09-28 17:59,baseline_logreg,w2_energy_mfcc40,"{""C"": 0.1}",0.5111,0.5103,0.5317,0.5277,4.5,0.01
+2026-09-28 19:35,baseline_logreg,w1.5_energy_mfcc40,"{""C"": 0.1}",0.5333,0.531,0.5524,0.5488,4.6,0.0
+2026-09-28 19:35,baseline_logreg,w3_energy_mfcc40,"{""C"": 0.1}",0.5,0.4978,0.4857,0.4777,5.0,0.01
+2026-09-28 19:36,baseline_logreg,w2_start_mfcc40,"{""C"": 0.1}",0.3063,0.3008,0.3,0.3021,5.1,0.01
+2026-09-28 19:36,baseline_logreg,w2_energy_mfcc40_d,"{""C"": 0.1}",0.6968,0.6971,0.673,0.6726,7.3,0.01
+2026-09-29 15:08,baseline_logreg,w1.5_energy_mfcc40_d,"{""C"": 0.1}",0.7159,0.7155,0.7095,0.7083,5.9,0.01
+2026-09-29 15:35,baseline_svm,w1.5_energy_mfcc40_d,"{""C"": 10}",0.7048,0.7046,0.7048,0.7027,2.4,0.63
+2026-09-29 15:35,baseline_rf,w1.5_energy_mfcc40_d,"{""n_estimators"": 500}",0.6825,0.6847,0.646,0.6452,5.5,0.22
