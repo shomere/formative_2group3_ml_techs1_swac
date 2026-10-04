@@ -1,122 +1,82 @@
-# Swahili Audio Classification — Formative Assignment 2
+# Swahili Audio Classification
 
-**Group 3 | Machine Learning Technologies 1**
+Formative Assignment 2, Group 3, Machine Learning Technologies 1
 
-12-class spoken Swahili word classification using classical and deep learning models.  
-Dataset: [Zindi — Swahili Words Audio Classification](https://zindi.africa/competitions/swahili-words-audio-classification)
+This repo is our attempt at the Zindi *Swahili Words Audio Classification* challenge: given a short recording of someone saying a Swahili word, which of 12 words was it? We wanted to see how much it helps to model the audio as a sequence, so we compare simple classical models against neural ones that read the recording frame by frame.
 
----
+## Contents
 
-## Table of Contents
+- [The task](#the-task)
+- [Dataset](#dataset)
+- [Project structure](#project-structure)
+- [Setup](#setup)
+- [Running the pipeline](#running-the-pipeline)
+- [Features](#features)
+- [Models](#models)
+- [Results](#results)
+- [Design decisions](#design-decisions)
+- [Running on Google Colab](#running-on-google-colab)
 
-1. [Task Description](#task-description)
-2. [Dataset](#dataset)
-3. [Project Structure](#project-structure)
-4. [Setup & Installation](#setup--installation)
-5. [Reproducing the Pipeline](#reproducing-the-pipeline)
-6. [Feature Engineering](#feature-engineering)
-7. [Models](#models)
-8. [Results](#results)
-9. [Key Design Decisions](#key-design-decisions)
-10. [Google Colab](#google-colab)
+## The task
 
----
+Each clip is a 16 kHz mono WAV file containing one of these words:
 
-## Task Description
+`hapana` · `kumi` · `mbili` · `moja` · `nane` · `ndio` · `nne` · `saba` · `sita` · `tano` · `tatu` · `tisa`
 
-Classify 16 kHz mono WAV recordings into one of **12 Swahili words**:
-
-> `hapana` · `kumi` · `mbili` · `moja` · `nane` · `ndio` · `nne` · `saba` · `sita` · `tano` · `tatu` · `tisa`
-
-Primary evaluation metric: **macro-averaged F1-score**, which weights all 12 classes equally regardless of class frequency — more informative than accuracy on an imbalanced dataset.
-
----
+We use macro-averaged F1 as our main metric. It treats every class equally, so a model can't hide a weak class behind strong ones.
 
 ## Dataset
 
-- Source: Zindi Swahili Words Audio Classification challenge
-- Format: 16 kHz mono WAV files
-- Labels: provided in `Train.csv` with columns `filename` and `label`
-- Split: stratified 70% train / 15% validation / 15% test (frozen in `data/processed/splits.csv`)
+- **Source:** Zindi, *Swahili Words Audio Classification*
+- **Audio:** 16 kHz mono WAV
+- **Labels:** `Train.csv`, with columns `filename` and `label`
+- **Split:** stratified 70% train, 15% validation, 15% test, saved in `data/processed/splits.csv` so every model sees the same partitions
 
-The dataset contains variable-length recordings. Most clips are short (under 3 seconds) but some extend to 10–15 seconds with significant silence padding. EDA figures are saved to `reports/figures/`.
+Clip lengths vary a lot. Most recordings are under 3 seconds, but some run to 10-15 seconds and are mostly silence, which is why we ended up choosing a window around the speech (see [Features](#features)). The EDA plots are in `reports/figures/`.
 
----
-
-## Project Structure
+## Project structure
 
 ```
 formative_2group3_ml_techs1_swac/
-│
-├── src/                            reusable pipeline scripts
-│   ├── data_overview.py            class distribution, duration stats, EDA plots
-│   ├── split.py                    stratified train/val/test split (seed=42)
-│   ├── features.py                 MFCC + delta feature extraction → .npz files
+├── src/                            pipeline scripts
+│   ├── data_overview.py            class counts, duration stats, EDA plots
+│   ├── split.py                    stratified train/val/test split (seed 42)
+│   ├── features.py                 MFCC + delta extraction, saved as .npz
 │   ├── baseline.py                 SVM / Random Forest / Logistic Regression
-│   └── eda_audio.py                audio-level EDA (active speech, mel spectrograms)
-│
+│   └── eda_audio.py                active-speech analysis, mel spectrograms
 ├── notebooks/
-│   └── bilstm_model.ipynb          BiLSTM model — TensorFlow/Keras (Colab-ready)
-│
+│   └── bilstm_model.ipynb          BiLSTM (TensorFlow/Keras, runs on Colab)
 ├── models/
-│   └── cnn_1d_model.py             1D CNN architecture + trainer class — PyTorch
-│
+│   └── cnn_1d_model.py             1D CNN and its trainer (PyTorch)
 ├── experiments/
-│   └── cnn_1d_experiments.py       1D CNN hyperparameter sweep (5 configurations)
-│
+│   └── cnn_1d_experiments.py       1D CNN sweep over 5 configurations
 ├── data/
-│   ├── raw/                        Train.csv + audio files (not committed)
-│   └── processed/
-│       └── splits.csv              frozen train/val/test index (committed)
-│
+│   ├── raw/                        Train.csv and audio (not committed)
+│   └── processed/splits.csv        frozen split (committed)
 ├── reports/
-│   ├── experiments.csv             all baseline run logs
-│   └── figures/                    EDA plots and confusion matrices
-│       ├── class_counts.png
-│       ├── duration_by_class.png
-│       ├── duration_hist.png
-│       ├── examples_mel.png
-│       ├── speech_vs_total.png
-│       ├── cm_baseline_logreg.png
-│       ├── cm_baseline_svm.png
-│       └── cm_baseline_rf.png
-│
+│   ├── experiments.csv             baseline run logs
+│   └── figures/                    EDA plots, confusion matrices
 ├── results/
-│   ├── cnn_experiments.csv         1D CNN hyperparameter sweep results
-│   └── hyperparameter_analysis.png visual comparison of CNN configurations
-│
-├── w1.5_energy_mfcc40_d/           pre-extracted features (not committed to git)
-│   ├── train.npz
-│   ├── val.npz
-│   ├── test.npz
-│   └── labels.json
-│
+│   ├── cnn_experiments.csv         CNN sweep results
+│   └── hyperparameter_analysis.png comparison of CNN configurations
+├── w1.5_energy_mfcc40_d/           extracted features (not committed)
 └── requirements.txt
 ```
 
----
-
-## Setup & Installation
-
-### Requirements
+## Setup
 
 ```bash
 pip install -r requirements.txt
 ```
 
-On Linux or Google Colab, also install system audio libraries:
+On Linux or Colab you also need the system audio libraries:
 
 ```bash
 sudo apt install ffmpeg libsndfile1
 ```
 
-### Data
+Put the data under `data/raw/`: `Train.csv` from Zindi, plus the audio extracted from `Swahili_words.zip`:
 
-Place the following under `data/raw/`:
-- `Train.csv` — label index from the Zindi competition
-- Extracted audio folder from `Swahili_words.zip`
-
-The directory should look like:
 ```
 data/raw/
   Train.csv
@@ -126,44 +86,35 @@ data/raw/
     ...
 ```
 
----
+## Running the pipeline
 
-## Reproducing the Pipeline
+Run these from the repo root, in order. Paths are relative, so the same commands work locally and on Colab.
 
-Run the steps below in order from the repo root. All paths are relative and work identically on local machines and Google Colab.
-
-### Step 1 — Dataset Overview & EDA
+**1. Dataset overview**
 
 ```bash
 python src/data_overview.py --train-csv data/raw/Train.csv --audio-dir data/raw
 ```
 
-Outputs:
-- Class distribution counts
-- Duration statistics (min, max, mean, std)
-- Saves `reports/figures/class_counts.png`, `duration_hist.png`, `duration_by_class.png`
+Prints class counts and duration statistics, and saves `class_counts.png`, `duration_hist.png`, and `duration_by_class.png` to `reports/figures/`.
 
-### Step 2 — Audio-Level EDA
+**2. Audio-level EDA**
 
 ```bash
 python src/eda_audio.py --index data/processed/train_index.csv
 ```
 
-Outputs:
-- Active speech duration vs total duration scatter plot
-- Per-class mel spectrogram examples
-- Saves `reports/figures/speech_vs_total.png`, `examples_mel.png`
+Plots active speech against total clip length and one mel spectrogram per class (`speech_vs_total.png`, `examples_mel.png`).
 
-### Step 3 — Create Train/Val/Test Split
+**3. Train/val/test split**
 
 ```bash
 python src/split.py --index data/processed/train_index.csv
 ```
 
-Saves `data/processed/splits.csv` with a stratified 70/15/15 split using `random_state=42`.  
-This file is committed to the repo so all team members and all models use identical partitions.
+Writes `data/processed/splits.csv` (stratified 70/15/15, `random_state=42`). The file is committed so the whole team uses the same split.
 
-### Step 4 — Extract Features
+**4. Feature extraction**
 
 ```bash
 python src/features.py \
@@ -174,16 +125,9 @@ python src/features.py \
     --deltas
 ```
 
-Saves `w1.5_energy_mfcc40_d/{train,val,test}.npz` and `labels.json`.
+Writes `w1.5_energy_mfcc40_d/{train,val,test}.npz` and `labels.json`. Each clip becomes a tensor of shape `(150, 120)`: 150 time steps (1.5 s at a 10 ms hop) and 120 features (40 MFCCs, their deltas, and their delta-deltas).
 
-Output tensor shape: `(N, 150, 120)`
-- `N` — number of clips
-- `150` — timesteps (1.5s ÷ 10ms hop)
-- `120` — features (40 MFCCs × 3: base + Δ + ΔΔ)
-
-### Step 5 — Run Classical Baselines
-
-Run each classifier separately:
+**5. Classical baselines**
 
 ```bash
 python src/baseline.py --feat-dir w1.5_energy_mfcc40_d --model logreg
@@ -191,201 +135,124 @@ python src/baseline.py --feat-dir w1.5_energy_mfcc40_d --model svm
 python src/baseline.py --feat-dir w1.5_energy_mfcc40_d --model rf
 ```
 
-Each run:
-- Performs a small grid search over hyperparameters on the validation set
-- Evaluates the best config on the test set
-- Saves a confusion matrix to `reports/figures/`
-- Appends a result row to `reports/experiments.csv`
+Each run does a small grid search on the validation set, evaluates the best setting on the test set, saves a confusion matrix to `reports/figures/`, and appends a row to `reports/experiments.csv`.
 
-### Step 6 — BiLSTM (Jupyter / Colab)
+**6. BiLSTM**
 
-Open `notebooks/bilstm_model.ipynb` and run all cells.
+Open `notebooks/bilstm_model.ipynb` and run all cells. The notebook detects whether it's on Colab or a local machine, loads the `.npz` features, z-scores them using training statistics only, trains and evaluates the model, saves the learning curves and confusion matrix, logs the result to `reports/experiments.csv`, and writes the model to `models/bilstm_swahili.keras`.
 
-The notebook:
-- Auto-detects Colab vs local and sets paths accordingly
-- Loads `.npz` features, applies z-score normalisation (fitted on train only)
-- Builds, trains, and evaluates the BiLSTM model
-- Saves learning curves and confusion matrix to `reports/figures/`
-- Appends results to `reports/experiments.csv`
-- Saves the trained model to `models/bilstm_swahili.keras`
-
-### Step 7 — 1D CNN Hyperparameter Sweep
+**7. 1D CNN sweep**
 
 ```bash
 python experiments/cnn_1d_experiments.py
 ```
 
-Runs 5 configurations, saves results to `results/cnn_experiments.csv` and a comparison plot to `results/hyperparameter_analysis.png`.
+Trains five configurations and saves the results to `results/cnn_experiments.csv` and a comparison plot to `results/hyperparameter_analysis.png`.
 
----
+## Features
 
-## Feature Engineering
+Every model uses the features from `src/features.py`, so the comparison is about the models and not the preprocessing.
 
-All models share the same pre-extracted features from `src/features.py`.
+We load each clip at 16 kHz mono and peak-normalize it, so quiet and loud recordings look alike. The next step matters most. Taking the first 1.5 seconds of a clip would often give us silence, so we slide a 1.5 s window over the clip and keep the segment with the most energy (RMS). That puts the window on the spoken word.
 
-### Audio Preprocessing
-
-1. **Load** at 16 kHz mono
-2. **Peak-normalise** — divide by max absolute amplitude to handle recording level variation
-3. **Window selection** — extract a 1.5s segment using energy-based selection (see below)
-
-### Energy-Based Window Selection
-
-Rather than taking the first 1.5s or the full clip, a sliding window finds the 1.5s segment with the highest RMS energy. This centres the window on the actual spoken word, removing leading/trailing silence that would otherwise dominate the feature representation.
-
-### MFCC Extraction
-
-- 40 Mel-Frequency Cepstral Coefficients (MFCCs)
-- Frame size: 25ms (400 samples), hop: 10ms (160 samples)
-- 64 mel filterbanks
-
-### Delta Features
-
-First-order (Δ) and second-order (ΔΔ) derivatives are appended to the base MFCCs:
-- Δ MFCCs capture the velocity of the spectral envelope (how features change over time)
-- ΔΔ MFCCs capture acceleration (rate of change of change)
-
-This triples the feature dimension: 40 → 120, encoding phonetic transitions that static MFCCs miss.
-
-### Final Shape
-
-`(N, 150, 120)` — 150 timesteps × 120 features per clip.
-
----
+From that window we compute 40 MFCCs (25 ms frames, 10 ms hop, 64 mel filterbanks) and add their first- and second-order deltas. A static MFCC describes the spectrum at one instant. The deltas describe how it is changing, which is where a lot of the information about how one sound moves into the next lives. That takes us from 40 to 120 features per frame, and one `(150, 120)` array per clip.
 
 ## Models
 
-### 1. Logistic Regression (`src/baseline.py`)
+### Classical baselines (`src/baseline.py`)
 
-Features are aggregated over the time axis (mean, std, min, max → 480-dim vector) before classification. Grid search over `C ∈ {0.1, 1, 10}`.
+These need fixed-size input, so we summarize each clip over time with the mean, standard deviation, minimum, and maximum of every feature. That gives a 480-dimensional vector.
 
-Best params: `C=0.1`
+| Model | Grid searched | Best setting |
+|---|---|---|
+| Logistic Regression | C in {0.1, 1, 10} | C = 0.1 |
+| SVM (RBF kernel, with StandardScaler) | C in {1, 10, 100} | C = 10 |
+| Random Forest | n_estimators in {200, 500} | 500 |
 
-### 2. SVM — RBF Kernel (`src/baseline.py`)
+### BiLSTM (`notebooks/bilstm_model.ipynb`, TensorFlow/Keras)
 
-Same 480-dim aggregated features with StandardScaler. Grid search over `C ∈ {1, 10, 100}`.
-
-Best params: `C=10`
-
-### 3. Random Forest (`src/baseline.py`)
-
-Same 480-dim aggregated features. Grid search over `n_estimators ∈ {200, 500}`.
-
-Best params: `n_estimators=500`
-
-### 4. BiLSTM (`notebooks/bilstm_model.ipynb`) — TensorFlow/Keras
-
-Processes the full `(150, 120)` sequence without aggregation, capturing temporal dynamics in both directions.
-
-**Architecture:**
+The BiLSTM reads the full `(150, 120)` sequence with no summarizing. Speech is context-dependent: how a sound is produced depends on what comes before and after it (coarticulation). A bidirectional LSTM sees each frame from both directions, which suits this. The approach is well established in speech recognition (Graves & Schmidhuber, 2005; Graves et al., 2013).
 
 ```
 Input (150, 120)
-  → BiLSTM(128 units, return_sequences=True) → BatchNorm → Dropout(0.3)
-  → BiLSTM(64 units,  return_sequences=False) → BatchNorm → Dropout(0.3)
-  → Dense(128, ReLU) → Dropout(0.15)
-  → Dense(12, softmax)
+  -> BiLSTM(128, return_sequences=True) -> BatchNorm -> Dropout(0.3)
+  -> BiLSTM(64)                         -> BatchNorm -> Dropout(0.3)
+  -> Dense(128, ReLU) -> Dropout(0.15)
+  -> Dense(12, softmax)
 ```
 
-**Training config:**
-- Optimiser: Adam (lr=1e-3)
-- Loss: sparse categorical cross-entropy
-- EarlyStopping: patience=12, monitor=val_accuracy, restore_best_weights=True
-- ReduceLROnPlateau: factor=0.5, patience=6, min_lr=1e-6
-- Max epochs: 60, batch size: 64
+Training: Adam (lr 1e-3), sparse categorical cross-entropy, batch size 64, up to 60 epochs. Early stopping watches validation accuracy (patience 12, restoring the best weights), and the learning rate halves after 6 epochs without improvement (minimum 1e-6).
 
-**Why BiLSTM?**  
-Speech is a bidirectional temporal signal — the acoustic realisation of a phoneme depends on both preceding and following context (coarticulation). A BiLSTM processes each MFCC frame in both the forward and backward direction, capturing these dependencies. This is well-established in the speech recognition literature (Graves & Schmidhuber, 2005; Graves et al., 2013).
+### 1D CNN (`models/cnn_1d_model.py`, PyTorch)
 
-### 5. 1D CNN (`models/cnn_1d_model.py`) — PyTorch
-
-Applies convolutional filters directly over the time axis to detect local temporal patterns such as the onset, nucleus, and coda of a syllable.
-
-**Architecture:**
+The convolutions slide along the time axis, so they pick up short local patterns, such as the onset, vowel, and ending of a syllable.
 
 ```
-Input (120, 150)  ← features as channels, time as sequence length
-  → Conv1D(→32, k=3) → BN → ReLU → MaxPool(2) → Dropout
-  → Conv1D(→64, k=3) → BN → ReLU → MaxPool(2) → Dropout
-  → Conv1D(→128, k=3) → BN → ReLU → GlobalAvgPool → Dropout
-  → Dense(128, ReLU) → Dropout
-  → Dense(12)
+Input (120, 150)   # features as channels, time as length
+  -> Conv1D(32, k=3)  -> BN -> ReLU -> MaxPool(2) -> Dropout
+  -> Conv1D(64, k=3)  -> BN -> ReLU -> MaxPool(2) -> Dropout
+  -> Conv1D(128, k=3) -> BN -> ReLU -> GlobalAvgPool -> Dropout
+  -> Dense(128, ReLU) -> Dropout
+  -> Dense(12)
 ```
 
-**Training config:**
-- Optimiser: Adam (lr=1e-3)
-- Loss: CrossEntropyLoss
-- ReduceLROnPlateau: factor=0.5, patience=5
-- EarlyStopping: patience=10
-- Max epochs: 50
-
----
+Training: Adam (lr 1e-3), cross-entropy, up to 50 epochs, learning rate halved after 5 epochs without improvement, early stopping with patience 10.
 
 ## Results
 
-### Classical Baselines
+### Classical baselines
 
-| Model | Val Accuracy | Val macro-F1 | Test Accuracy | Test macro-F1 |
+| Model | Val accuracy | Val macro-F1 | Test accuracy | Test macro-F1 |
 |---|---|---|---|---|
 | Logistic Regression | 0.7159 | 0.7155 | 0.7095 | 0.7083 |
 | SVM (RBF, C=10) | 0.7048 | 0.7046 | 0.7048 | 0.7027 |
 | Random Forest (500 trees) | 0.6825 | 0.6847 | 0.6460 | 0.6452 |
 
-### 1D CNN Hyperparameter Sweep
+### 1D CNN sweep
 
-| Config | Filters | Kernel | Batch | Dropout | Test Accuracy | Test F1 |
+| Config | Filters | Kernel | Batch | Dropout | Test accuracy | Test F1 |
 |---|---|---|---|---|---|---|
 | baseline | 32 | 3 | 64 | 0.3 | 0.9111 | 0.9113 |
 | increased_filters | 64 | 3 | 64 | 0.3 | 0.9317 | 0.9313 |
 | smaller_batch | 64 | 3 | 32 | 0.3 | 0.9381 | 0.9384 |
-| **larger_kernel** | **64** | **5** | **32** | **0.3** | **0.9413** | **0.9411** |
+| larger_kernel | 64 | 5 | 32 | 0.3 | 0.9413 | 0.9411 |
 | higher_dropout | 64 | 3 | 32 | 0.4 | 0.9349 | 0.9351 |
 
-Best 1D CNN config: `larger_kernel` — 64 filters, kernel size 5, batch 32, dropout 0.3.
+The best configuration was `larger_kernel` (64 filters, kernel size 5, batch size 32, dropout 0.3).
 
-### Overall Comparison
+### Overall
 
 | Model | Framework | Test macro-F1 |
 |---|---|---|
-| Random Forest | sklearn | 0.6452 |
-| SVM | sklearn | 0.7027 |
-| Logistic Regression | sklearn | 0.7083 |
-| BiLSTM | TensorFlow/Keras | *(run notebook)* |
-| **1D CNN (larger_kernel)** | **PyTorch** | **0.9411** |
+| Random Forest | scikit-learn | 0.6452 |
+| SVM | scikit-learn | 0.7027 |
+| Logistic Regression | scikit-learn | 0.7083 |
+| BiLSTM | TensorFlow/Keras | *to be filled in after running the notebook* |
+| 1D CNN (`larger_kernel`) | PyTorch | 0.9411 |
 
-The 1D CNN achieves a **+0.233 macro-F1 improvement** over the best classical baseline (Logistic Regression), demonstrating the advantage of learning directly from the temporal sequence rather than aggregating features.
+The best CNN beats the best classical baseline (Logistic Regression) by 0.233 macro-F1. The most likely reason is that the classical models only see summary statistics, so the CNN keeps information about timing that they lose.
 
----
+## Design decisions
 
-## Key Design Decisions
+A few choices shaped everything else:
 
-**Energy-based window selection**  
-Fixed-start windowing captures silence at the beginning of recordings. Energy-based selection finds the most acoustically active 1.5s segment, ensuring the model sees the actual spoken word rather than silence padding.
+- **Silence was a real problem**, so we pick the highest-energy window instead of a fixed start.
+- **We froze one split** and committed `splits.csv`. Every model, classical or neural, is scored on the same clips, so the numbers can be compared directly.
+- **We lead with macro-F1** because the classes aren't perfectly balanced.
+- **Classical models get summaries, neural models get sequences.** SVM, Random Forest, and Logistic Regression need fixed-size vectors, so we reduce each clip to its per-feature mean, standard deviation, minimum, and maximum. The BiLSTM and CNN see the whole `(150, 120)` sequence.
 
-**Delta and delta-delta MFCCs**  
-Static MFCCs describe the spectral shape at each frame but not how it changes. Δ and ΔΔ features encode the velocity and acceleration of the spectral envelope, capturing phonetic transitions (e.g. consonant-to-vowel coarticulation). This tripled the feature dimension (40 → 120) and consistently improved all models.
+## Notes from the team
 
-**Frozen train/val/test split**  
-`data/processed/splits.csv` is committed to the repository. All models — classical and neural — are evaluated on the exact same partitions, preventing any data leakage and ensuring fair comparison across experiments.
+*Replace this section with your own observations before submitting. Things worth writing down: what you tried that did not work, what surprised you in the results or the confusion matrices, which word pairs the models mix up and what you heard when you listened to those clips, and how you split the work.*
 
-**Macro-F1 as primary metric**  
-The 12 classes are not perfectly balanced. Macro-F1 computes F1 per class and averages them equally, penalising models that perform well on frequent classes but poorly on rare ones. Accuracy would be misleading here.
+## Running on Google Colab
 
-**Aggregation for classical models vs full sequence for neural models**  
-Classical models (SVM, RF, LogReg) require fixed-size input, so features are aggregated over the time axis (mean, std, min, max → 480-dim). Neural models (BiLSTM, 1D CNN) consume the full `(150, 120)` sequence, preserving temporal structure — which explains their substantially higher performance.
+The scripts use relative paths and run on Colab as they are. For the BiLSTM notebook:
 
----
-
-## Google Colab
-
-All scripts use relative paths and work on Colab without modification.
-
-For the BiLSTM notebook:
-1. Mount Google Drive
-2. Upload the `w1.5_energy_mfcc40_d/` folder to your Drive root
-3. The notebook auto-detects Colab and sets paths accordingly
+1. Mount Google Drive.
+2. Upload the `w1.5_energy_mfcc40_d/` folder to the root of your Drive.
+3. In cell 0 of `bilstm_model.ipynb`, set:
 
 ```python
-# Cell 0 in bilstm_model.ipynb — set this if running on Colab
 FEAT_DIR = '/content/drive/MyDrive/w1.5_energy_mfcc40_d'
 ```
